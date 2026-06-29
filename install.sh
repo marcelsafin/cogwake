@@ -32,8 +32,14 @@ if [ -n "${SUDO_UID:-}" ]; then
 fi
 
 launchctl bootout "system/$LABEL" 2>/dev/null || true
-launchctl bootstrap system "$PLIST"
+# bootout is async; bootstrapping before teardown finishes returns
+# "Bootstrap failed: 5: Input/output error". Wait until it's really gone.
+i=0; while launchctl print "system/$LABEL" >/dev/null 2>&1 && [ "$i" -lt 50 ]; do sleep 0.2; i=$((i+1)); done
+
 launchctl enable "system/$LABEL" 2>/dev/null || true
+# Bootstrap; if it still races to EIO, kickstart restarts in place and picks up
+# the freshly copied /usr/local/bin/cogwake.sh.
+launchctl bootstrap system "$PLIST" 2>/dev/null || launchctl kickstart -k "system/$LABEL"
 sleep 1
 
 echo "installed: $LABEL (root LaunchDaemon)"

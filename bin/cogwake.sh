@@ -37,7 +37,9 @@ CFG="${COGWAKE_CFG:-/usr/local/etc/cogwake.env}"
 : "${BUSY_CPU:=0.30}"   # CPU-seconds the tree must burn in WINDOW to count as "working"
                         # 0.30s / 2s ≈ 15% of one core, averaged over the window
 : "${HOLD:=30}"         # stay awake this long after the last activity, seconds
-: "${POLL:=5}"          # pause between checks, seconds
+: "${POLL:=5}"          # pause between checks while the lid is shut, seconds
+: "${LID_OPEN_POLL:=15}" # slower poll while the lid is open (less CPU; lid-open only
+                         # pre-arms, and the heavy thermal sampler never runs then)
 : "${BATT_FLOOR:=0}"    # on battery, release below this % (0 = off, run till it dies)
 : "${THERM_GUARD:=1}"   # 1 = with the lid shut, release when thermal pressure is serious
 : "${THERM_RE:=heavy|trapping|sleeping|serious|critical}"  # pressure levels that mean "too hot"
@@ -111,8 +113,8 @@ main(){
   pmset -a disablesleep 0 2>/dev/null; SLEEP_DISABLED=0
   trap 'pmset -a disablesleep 0 2>/dev/null; log "stopped — disablesleep reset to 0"' EXIT INT TERM
 
-  local lastactive=0 pids c0 c1 delta active now within want pct lvl
-  log "started (re=$AGENT_RE window=${WINDOW}s busy=${BUSY_CPU}cpu-s hold=${HOLD}s battfloor=${BATT_FLOOR}% therm=${THERM_GUARD})"
+  local lastactive=0 pids c0 c1 delta active now within want pct lvl closed
+  log "started (re=$AGENT_RE window=${WINDOW}s busy=${BUSY_CPU}cpu-s hold=${HOLD}s battfloor=${BATT_FLOOR}% therm=${THERM_GUARD} poll=${POLL}/${LID_OPEN_POLL}s)"
   while :; do
     pids=$(agent_tree); pids=${pids%,}
     if [ -n "$pids" ]; then
@@ -127,6 +129,7 @@ main(){
 
     now=$(date +%s)
     [ "$active" = 1 ] && lastactive=$now
+    closed=0; lid_closed && closed=1
 
     within=0
     if [ -n "$pids" ] && [ $((now - lastactive)) -lt "$HOLD" ]; then within=1; fi
@@ -140,8 +143,8 @@ main(){
       fi
     fi
 
-    # Thermal valve: only matters with the lid shut (no airflow). Sample only then.
-    if [ "$want" = 1 ] && [ "$THERM_GUARD" = 1 ] && lid_closed; then
+    # Thermal valve: only matters (and only sampled) with the lid shut — no airflow.
+    if [ "$want" = 1 ] && [ "$THERM_GUARD" = 1 ] && [ "$closed" = 1 ]; then
       lvl=$(thermal_level)
       if is_hot "$lvl"; then
         want=0; log "thermal '$lvl' with lid closed — releasing to cool (sleep allowed)"
@@ -153,7 +156,8 @@ main(){
     fi
 
     set_disablesleep "$want"
-    sleep "$POLL"
+    # Lid open: only pre-arming, so poll slowly to spare CPU. Lid shut: poll fast.
+    if [ "$closed" = 1 ]; then sleep "$POLL"; else sleep "$LID_OPEN_POLL"; fi
   done
 }
 

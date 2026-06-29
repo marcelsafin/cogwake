@@ -44,6 +44,10 @@ By default cogwake keeps working on battery with no charge floor. Set `BATT_FLOO
 
 A closed laptop in a bag has no airflow, so heat is the danger, not charge. With the lid shut, cogwake samples macOS thermal pressure. At a serious level (`THERM_RE`, default `heavy|trapping|sleeping|serious|critical`) it releases the override and lets the Mac sleep to cool, even mid-task. Your work pauses with the process frozen, not killed, and resumes when you open the lid. Normal load that only warms the Mac (moderate or fair pressure) keeps running.
 
+### Footprint
+
+cogwake can't go fully idle while the lid is open. To win the lid-close race it has to pre-arm, which means a light pulse must run with the lid open to keep the flag right. That pulse is one `pgrep` plus one `ps` scan, about 0.08 CPU-seconds per cycle, and with the lid open it polls every `LID_OPEN_POLL` seconds (default 15). The heavy part, the `powermetrics` thermal sample, runs only with the lid shut. So at your desk it costs near zero, and it does the real work in the bag.
+
 ## Install
 
 ```bash
@@ -81,7 +85,8 @@ Edit `/usr/local/etc/cogwake.env`:
 | `THERM_GUARD` | `1` | with the lid shut, sleep on serious thermal pressure |
 | `THERM_RE` | `heavy\|trapping\|sleeping\|serious\|critical` | pressure levels that count as too hot |
 | `WINDOW` | `2` | CPU sample window, seconds |
-| `POLL` | `5` | pause between checks, seconds |
+| `POLL` | `5` | pause between checks while the lid is shut |
+| `LID_OPEN_POLL` | `15` | pause between checks while the lid is open (lighter) |
 
 Reload after an edit:
 
