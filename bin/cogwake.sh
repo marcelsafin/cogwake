@@ -79,7 +79,10 @@ agent_tree(){
   cand=${cand%,}
   [ -z "$cand" ] && return 0
   # Drop GUI apps / daemons that only matched because an agent word is in their
-  # path or args (see EXCLUDE_RE). One ps call; keep the real CLI/interpreter agents.
+  # path or args (see EXCLUDE_RE). One ps call; keep the real CLI/interpreter
+  # agents. EXCLUDE_RE is `:=`-defaulted above, so it is never empty here (an empty
+  # pattern would make grep -Eiv drop every root) — a config `EXCLUDE_RE=''` falls
+  # back to the default rather than disabling the filter.
   roots=$(ps -o pid=,command= -p "$cand" 2>/dev/null | grep -Eiv "$EXCLUDE_RE" | awk '{print $1}' | sort -un | tr '\n' ' ')
   [ -z "$roots" ] && return 0
   ps -axo pid=,ppid= 2>/dev/null | awk -v roots="$roots" '
@@ -192,9 +195,12 @@ main(){
     [ "$therm_hot" = 1 ] && want=0
 
     set_disablesleep "$want"
-    # Poll fast whenever an agent is present (so a just-started task is armed before
-    # you can close the lid) or the lid is shut; otherwise idle slowly to spare CPU.
-    if [ "$closed" = 1 ] || [ -n "$pids" ]; then sleep "$POLL"; else sleep "$LID_OPEN_POLL"; fi
+    # Poll fast while actually holding the Mac awake (an agent is working, so a
+    # mid-task lid close is armed) or whenever the lid is shut. Idle with the lid
+    # open (e.g. persistent agent servers sitting at a prompt) polls slowly to
+    # spare battery. Tradeoff: an idle agent that starts work can take up to
+    # LID_OPEN_POLL to arm — fine, since the lid-close case is mid-work.
+    if [ "$closed" = 1 ] || [ "$within" = 1 ]; then sleep "$POLL"; else sleep "$LID_OPEN_POLL"; fi
   done
 }
 
