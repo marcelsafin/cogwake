@@ -33,6 +33,15 @@ CFG="${COGWAKE_CFG:-/usr/local/etc/cogwake.env}"
 [ -f "$CFG" ] && . "$CFG"
 
 : "${AGENT_RE:=copilot|claude|codex|aider|cursor-agent|ollama|gemini-cli|continue}"
+# Matching the full command line (pgrep -f) is needed because codex/gemini run as
+# `node`, cursor-agent as `bash`, so their comm isn't the agent name. But -f also
+# catches GUI apps and daemons whose path/args merely contain an agent word (a
+# browser named like an agent, a desktop chat app, fsmonitor, mcp-remote). Those
+# get dropped by this command-line filter — a Chromium swarm burns real CPU and
+# would otherwise falsely hold the Mac awake in the bag. `copilot-detached` drops
+# Copilot CLI's own detached background servers (dev servers it launched), which
+# burn CPU on their own and are not the agent thinking.
+: "${EXCLUDE_RE:=\.app/Contents/|[Cc]rashpad|fsmonitor|mcp-remote|http\.server|copilot-detached}"
 : "${WINDOW:=2}"        # CPU sampling window, seconds
 : "${BUSY_CPU:=0.30}"   # CPU-seconds the tree must burn in WINDOW to count as "working"
                         # 0.30s / 2s ≈ 15% of one core, averaged over the window
@@ -43,6 +52,8 @@ CFG="${COGWAKE_CFG:-/usr/local/etc/cogwake.env}"
 : "${BATT_FLOOR:=0}"    # on battery, release below this % (0 = off, run till it dies)
 : "${THERM_GUARD:=1}"   # 1 = with the lid shut, release when thermal pressure is serious
 : "${THERM_RE:=heavy|trapping|sleeping|serious|critical}"  # pressure levels that mean "too hot"
+: "${THERM_POLL:=30}"   # seconds between thermal samples (powermetrics is the only real
+                        # cost; sampling it every 30s instead of every POLL saves battery)
 LOG="${COGWAKE_LOG:-/var/log/cogwake.log}"
 
 log(){ printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$LOG" 2>/dev/null; }
@@ -63,8 +74,13 @@ cpu_secs(){
 # Agent root PIDs + every descendant (so a build/test the agent spawned counts).
 # ponytail: one awk BFS — Bash 3.2 has no associative arrays.
 agent_tree(){
-  local roots
-  roots=$(pgrep -f -i "$AGENT_RE" 2>/dev/null | sort -un | tr '\n' ' ')
+  local cand roots
+  cand=$(pgrep -f -i "$AGENT_RE" 2>/dev/null | sort -un | tr '\n' ',')
+  cand=${cand%,}
+  [ -z "$cand" ] && return 0
+  # Drop GUI apps / daemons that only matched because an agent word is in their
+  # path or args (see EXCLUDE_RE). One ps call; keep the real CLI/interpreter agents.
+  roots=$(ps -o pid=,command= -p "$cand" 2>/dev/null | grep -Eiv "$EXCLUDE_RE" | awk '{print $1}' | sort -un | tr '\n' ' ')
   [ -z "$roots" ] && return 0
   ps -axo pid=,ppid= 2>/dev/null | awk -v roots="$roots" '
     { kids[$2] = kids[$2] " " $1 }
@@ -114,7 +130,8 @@ main(){
   trap 'pmset -a disablesleep 0 2>/dev/null; log "stopped — disablesleep reset to 0"' EXIT INT TERM
 
   local lastactive=0 pids c0 c1 delta active now within want pct lvl closed
-  log "started (re=$AGENT_RE window=${WINDOW}s busy=${BUSY_CPU}cpu-s hold=${HOLD}s battfloor=${BATT_FLOOR}% therm=${THERM_GUARD} poll=${POLL}/${LID_OPEN_POLL}s)"
+  local therm_hot=0 last_therm=0 unreadable=0 batt_logged=0
+  log "started (re=$AGENT_RE window=${WINDOW}s busy=${BUSY_CPU}cpu-s hold=${HOLD}s battfloor=${BATT_FLOOR}% therm=${THERM_GUARD}/${THERM_POLL}s poll=${POLL}/${LID_OPEN_POLL}s)"
   while :; do
     pids=$(agent_tree); pids=${pids%,}
     if [ -n "$pids" ]; then
@@ -139,25 +156,45 @@ main(){
     if [ "$want" = 1 ] && [ "$BATT_FLOOR" -gt 0 ] && on_battery; then
       pct=$(batt_pct)
       if [ -n "$pct" ] && [ "$pct" -le "$BATT_FLOOR" ]; then
-        want=0; log "battery ${pct}% <= ${BATT_FLOOR}% — releasing (sleep allowed)"
-      fi
-    fi
+        want=0
+        [ "$batt_logged" = 1 ] || { log "battery ${pct}% <= ${BATT_FLOOR}% — releasing (sleep allowed)"; batt_logged=1; }
+      else batt_logged=0; fi
+    else batt_logged=0; fi
 
-    # Thermal valve: only matters (and only sampled) with the lid shut — no airflow.
-    if [ "$want" = 1 ] && [ "$THERM_GUARD" = 1 ] && [ "$closed" = 1 ]; then
-      lvl=$(thermal_level)
-      if is_hot "$lvl"; then
-        want=0; log "thermal '$lvl' with lid closed — releasing to cool (sleep allowed)"
-      elif [ -n "$lvl" ]; then
-        log "thermal '$lvl' (lid closed, holding)"
-      else
-        log "thermal: unreadable (powermetrics gave nothing) — holding"
+    # Thermal valve: sampled at most every THERM_POLL while the lid is shut, since
+    # powermetrics is the one heavy call. therm_hot is sticky between samples, so a
+    # hot reading keeps the Mac releasable until a later sample reads cool — without
+    # it, re-arming every POLL would skip the heat check and could cook in the bag.
+    if [ "$THERM_GUARD" = 1 ] && [ "$closed" = 1 ]; then
+      if [ $((now - last_therm)) -ge "$THERM_POLL" ]; then
+        last_therm=$now
+        lvl=$(thermal_level)
+        if is_hot "$lvl"; then
+          unreadable=0
+          [ "$therm_hot" = 1 ] || log "thermal '$lvl' with lid closed — will sleep to cool"
+          therm_hot=1
+        elif [ -n "$lvl" ]; then
+          unreadable=0
+          [ "$therm_hot" = 0 ] || log "thermal '$lvl' (lid closed, cool again)"
+          therm_hot=0
+        else
+          # Can't read pressure. The thermal valve is the only hardware guard while
+          # sealed (BATT_FLOOR off), so fail safe toward cooling after two misses.
+          unreadable=$((unreadable + 1))
+          if [ "$unreadable" -ge 2 ] && [ "$therm_hot" = 0 ]; then
+            therm_hot=1; log "thermal: unreadable x$unreadable — releasing to be safe (cannot confirm cool)"
+          fi
+        fi
       fi
+    else
+      therm_hot=0; last_therm=0; unreadable=0   # lid open or guard off: clear; resample at once next close
     fi
+    [ "$therm_hot" = 1 ] && want=0
 
     set_disablesleep "$want"
-    # Lid open: only pre-arming, so poll slowly to spare CPU. Lid shut: poll fast.
-    if [ "$closed" = 1 ]; then sleep "$POLL"; else sleep "$LID_OPEN_POLL"; fi
+    # Poll fast whenever an agent is present (so a just-started task is armed before
+    # you can close the lid) or the lid is shut; otherwise idle slowly to spare CPU.
+    if [ "$closed" = 1 ] || [ -n "$pids" ]; then sleep "$POLL"; else sleep "$LID_OPEN_POLL"; fi
   done
 }
 

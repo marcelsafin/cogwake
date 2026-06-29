@@ -39,4 +39,14 @@ is_hot serious  && printf 'ok   is_hot serious\n'  || { printf 'FAIL is_hot seri
 is_hot nominal  && { printf 'FAIL is_hot nominal (should be cool)\n'; fail=1; } || printf 'ok   is_hot nominal=cool\n'
 is_hot ""       && { printf 'FAIL is_hot empty (should be cool)\n'; fail=1; } || printf 'ok   is_hot empty=cool\n'
 
+# EXCLUDE_RE: drop GUI apps + daemons, keep real CLI/interpreter agents.
+keep=$(printf '%s\n' \
+  "111 /Users/x/.local/bin/copilot" \
+  "222 /Applications/Codex.app/Contents/MacOS/Codex --type=renderer" \
+  "333 node /usr/local/bin/codex serve" \
+  "444 git fsmonitor--daemon" \
+  "555 npm exec @wix/mcp-remote" \
+  | grep -Eiv "$EXCLUDE_RE" | awk '{print $1}' | tr '\n' ',')
+check "exclude apps/daemons keep agents" "111,333," "$keep"
+
 [ "$fail" = 0 ] && { echo "selfcheck OK"; exit 0; } || { echo "selfcheck FAILED"; exit 1; }

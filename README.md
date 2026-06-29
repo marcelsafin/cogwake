@@ -79,8 +79,10 @@ Edit `/usr/local/etc/cogwake.env`:
 | Knob | Default | Meaning |
 |------|---------|---------|
 | `AGENT_RE` | `copilot\|claude\|codex\|aider\|cursor-agent\|ollama\|gemini-cli\|continue` | command patterns that count as an agent |
+| `EXCLUDE_RE` | `\.app/Contents/\|...\|copilot-detached` | command substrings that disqualify a match (GUI apps, daemons, detached dev servers) |
 | `BUSY_CPU` | `0.30` | CPU-seconds per window that count as working (≈15% of one core) |
-| `HOLD` | `30` | seconds awake after the last activity |
+| `HOLD` | `30` | seconds awake after the last activity (raise for tethered, slow-network work) |
+| `THERM_POLL` | `30` | seconds between thermal samples (the one costly call) |
 | `BATT_FLOOR` | `0` | on battery, release below this % (`0` = run till it dies) |
 | `THERM_GUARD` | `1` | with the lid shut, sleep on serious thermal pressure |
 | `THERM_RE` | `heavy\|trapping\|sleeping\|serious\|critical` | pressure levels that count as too hot |
@@ -103,6 +105,7 @@ bash test/selfcheck.sh   # CPU-time parser, process-tree walk, lid + battery pro
 ## Limits
 
 - It reads CPU, not intent. A long remote reasoning step with no local CPU and no token traffic past `HOLD` can still let the Mac sleep. Raise `HOLD` to cover that.
+- Detection matches the whole command line, so a GUI app or daemon whose path holds an agent word (a browser bundled as `<name>.app`, a desktop chat app) would over-match. `EXCLUDE_RE` drops those by command; add your own if something slips through. Check `agent_tree` against `/var/log/cogwake.log`.
 - `disablesleep=1` keeps the display awake too while an agent runs. macOS has no clamshell-only hold on battery.
 - The thermal valve reads macOS thermal pressure, which needs root (no temp sysctl on Apple Silicon). It samples only while the lid is shut. Check the log for the level your Mac reports and tune `THERM_RE`.
 - The daemon resets `disablesleep` to `0` on exit, and again at its next start, so a crash leaves no stuck always-awake state.
