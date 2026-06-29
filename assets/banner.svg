@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" width="1200" height="340" role="img" aria-label="cogwake">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" role="img" aria-label="cogwake">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0d1117"/>
@@ -6,28 +6,28 @@
     </linearGradient>
     <linearGradient id="pulse" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#fbbf24"/>
-      <stop offset="0.62" stop-color="#fbbf24"/>
-      <stop offset="0.78" stop-color="#3b4252"/>
+      <stop offset="0.60" stop-color="#fbbf24"/>
+      <stop offset="0.70" stop-color="#3b4252"/>
       <stop offset="1" stop-color="#3b4252"/>
     </linearGradient>
   </defs>
 
-  <rect x="0" y="0" width="1200" height="340" rx="18" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1200" height="360" rx="18" fill="url(#bg)"/>
   <rect x="0" y="0" width="1200" height="4" rx="2" fill="#fbbf24" opacity="0.85"/>
 
-  <text x="72" y="132" font-family="SF Pro Display, Helvetica, Arial, sans-serif" font-size="68" font-weight="800" fill="#e6edf3" letter-spacing="-1.5">cogwake</text>
-  <text x="74" y="178" font-family="SF Pro Text, Helvetica, Arial, sans-serif" font-size="23" fill="#8b949e">Hold the Mac awake while an AI agent works. Let it sleep when the agent stops.</text>
+  <text x="72" y="120" font-family="SF Pro Display, Helvetica, Arial, sans-serif" font-size="64" font-weight="800" fill="#e6edf3" letter-spacing="-1.5">cogwake</text>
+  <text x="74" y="162" font-family="SF Pro Text, Helvetica, Arial, sans-serif" font-size="22" fill="#8b949e">Hold the Mac awake while an AI agent works. Let it sleep when the agent stops.</text>
 
   <!-- CPU activity pulse: spikes on the left (working), flatline on the right (idle) -->
-  <path d="M72 262 L150 262 L176 206 L202 262 L300 262 L326 176 L352 262 L452 262 L478 214 L504 262 L604 262 L630 168 L656 262 L756 262 L800 262 L1080 262"
+  <path d="M72 290 L150 290 L176 244 L202 290 L300 290 L326 226 L352 290 L452 290 L478 248 L504 290 L604 290 L630 222 L656 290 L756 290 L800 290 L1120 290"
         fill="none" stroke="url(#pulse)" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
 
-  <text x="300" y="300" font-family="SF Mono, Menlo, monospace" font-size="15" fill="#fbbf24" text-anchor="middle">agent working &#8594; awake</text>
-  <text x="930" y="300" font-family="SF Mono, Menlo, monospace" font-size="15" fill="#6b7280" text-anchor="middle">idle &#8594; sleeps normally</text>
+  <text x="320" y="326" font-family="SF Mono, Menlo, monospace" font-size="15" fill="#fbbf24" text-anchor="middle">agent working &#8594; awake</text>
+  <text x="958" y="326" font-family="SF Mono, Menlo, monospace" font-size="15" fill="#6b7280" text-anchor="middle">idle &#8594; sleeps normally</text>
 
   <!-- crescent moon over the flat tail -->
-  <circle cx="1052" cy="150" r="34" fill="#cbd5e1"/>
-  <circle cx="1066" cy="140" r="30" fill="#161b22"/>
-  <text x="1098" y="120" font-family="SF Pro Display, Helvetica, Arial, sans-serif" font-size="20" fill="#6b7280">z</text>
-  <text x="1112" y="104" font-family="SF Pro Display, Helvetica, Arial, sans-serif" font-size="15" fill="#4b5563">z</text>
+  <circle cx="1052" cy="208" r="32" fill="#cbd5e1"/>
+  <circle cx="1066" cy="198" r="28" fill="#161b22"/>
+  <text x="1096" y="182" font-family="SF Pro Display, Helvetica, Arial, sans-serif" font-size="19" fill="#6b7280">z</text>
+  <text x="1110" y="166" font-family="SF Pro Display, Helvetica, Arial, sans-serif" font-size="14" fill="#4b5563">z</text>
 </svg>

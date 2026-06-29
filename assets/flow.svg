@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 400" width="1120" height="400" role="img" aria-label="cogwake decision loop">
+  <defs>
+    <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#6e7681"/>
+    </marker>
+    <style>
+      .node  { fill:#161b22; stroke:#30363d; stroke-width:1.5; }
+      .amber { fill:#161b22; stroke:#fbbf24; stroke-width:1.6; }
+      .grey  { fill:#161b22; stroke:#6b7280; stroke-width:1.5; }
+      .t     { font-family:'SF Pro Text',Helvetica,Arial,sans-serif; font-size:15px; fill:#c9d1d9; text-anchor:middle; }
+      .edge  { fill:none; stroke:#6e7681; stroke-width:2; }
+      .lbl   { font-family:'SF Mono',Menlo,monospace; font-size:13px; fill:#8b949e; text-anchor:middle; }
+      .lbg   { fill:#0d1117; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1120" height="400" rx="14" fill="#0d1117"/>
+
+  <!-- ===== edges ===== -->
+  <!-- A -> B -->
+  <path class="edge" d="M170 156 C198 140 206 118 228 107" marker-end="url(#arw)"/>
+  <!-- B -> C (yes) -->
+  <path class="edge" d="M320 100 H392" marker-end="url(#arw)"/>
+  <!-- C -> D -->
+  <path class="edge" d="M545 100 H632" marker-end="url(#arw)"/>
+  <!-- D -> E (yes) -->
+  <path class="edge" d="M765 100 H852" marker-end="url(#arw)"/>
+  <!-- D -> F (no) -->
+  <path class="edge" d="M700 145 V187" marker-end="url(#arw)"/>
+  <!-- F -> E (no) -->
+  <path class="edge" d="M765 235 C852 225 872 158 933 128" marker-end="url(#arw)"/>
+  <!-- F -> G (yes) -->
+  <path class="edge" d="M700 280 C700 312 762 292 833 260" marker-end="url(#arw)"/>
+  <!-- B -> A (no) -->
+  <path class="edge" d="M250 145 C240 184 200 182 174 165" marker-end="url(#arw)"/>
+  <!-- E -> A (loop, top channel) -->
+  <path class="edge" d="M940 75 L940 45 L110 45 L110 141" marker-end="url(#arw)"/>
+  <!-- G -> A (loop, bottom channel) -->
+  <path class="edge" d="M940 258 L940 360 L110 360 L110 185" marker-end="url(#arw)"/>
+
+  <!-- ===== nodes ===== -->
+  <!-- A every few seconds (hub) -->
+  <rect class="node" x="50" y="138" width="120" height="44" rx="22"/>
+  <text class="t" x="110" y="164">every few sec</text>
+
+  <!-- B agent processes? -->
+  <polygon class="node" points="250,55 320,100 250,145 180,100"/>
+  <text class="t" x="250" y="95">agent</text>
+  <text class="t" x="250" y="113">processes?</text>
+
+  <!-- C sum CPU -->
+  <rect class="node" x="395" y="75" width="150" height="50" rx="6"/>
+  <text class="t" x="470" y="95">sum CPU</text>
+  <text class="t" x="470" y="114">over 2s window</text>
+
+  <!-- D burned > threshold? -->
+  <polygon class="node" points="700,55 765,100 700,145 635,100"/>
+  <text class="t" x="700" y="95">burned &gt;</text>
+  <text class="t" x="700" y="113">threshold?</text>
+
+  <!-- E caffeinate held (awake) -->
+  <rect class="amber" x="855" y="75" width="170" height="50" rx="6"/>
+  <text class="t" x="940" y="105" fill="#fbbf24">caffeinate -i held</text>
+
+  <!-- F quiet > 150s? -->
+  <polygon class="node" points="700,190 765,235 700,280 635,235"/>
+  <text class="t" x="700" y="230">quiet &gt;</text>
+  <text class="t" x="700" y="248">150s?</text>
+
+  <!-- G release / sleep allowed -->
+  <rect class="grey" x="835" y="212" width="210" height="46" rx="23"/>
+  <text class="t" x="940" y="240" fill="#9ca3af">release &#183; sleep allowed</text>
+
+  <!-- ===== edge labels ===== -->
+  <g><rect class="lbg" x="340" y="83" width="30" height="17" rx="3"/><text class="lbl" x="355" y="96">yes</text></g>
+  <g><rect class="lbg" x="793" y="83" width="30" height="17" rx="3"/><text class="lbl" x="808" y="96">yes</text></g>
+  <g><rect class="lbg" x="688" y="158" width="26" height="17" rx="3"/><text class="lbl" x="701" y="171">no</text></g>
+  <g><rect class="lbg" x="838" y="186" width="26" height="17" rx="3"/><text class="lbl" x="851" y="199">no</text></g>
+  <g><rect class="lbg" x="735" y="289" width="30" height="17" rx="3"/><text class="lbl" x="750" y="302">yes</text></g>
+  <g><rect class="lbg" x="195" y="170" width="26" height="17" rx="3"/><text class="lbl" x="208" y="183">no</text></g>
+</svg>

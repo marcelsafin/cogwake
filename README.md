@@ -26,19 +26,9 @@ A launchd background job samples every few seconds:
 
 This binds wakefulness to real work. A build the agent started or a model streaming tokens shows up as CPU and keeps the system awake. Silence at a prompt does not.
 
-```mermaid
-flowchart LR
-  A([every few seconds]) --> B{agent<br/>processes?}
-  B -- no --> A
-  B -- yes --> C[sum CPU<br/>over 2s window]
-  C --> D{burned ><br/>threshold?}
-  D -- yes --> E[caffeinate -i held]
-  D -- no --> F{quiet<br/>> 150s?}
-  F -- no --> E
-  F -- yes --> G([release · sleep allowed])
-  E --> A
-  G --> A
-```
+<p align="center">
+  <img src="assets/flow.svg" alt="cogwake decision loop: poll agent processes, sum CPU over a 2s window, hold caffeinate while busy or within 150s, release when quiet" width="94%">
+</p>
 
 ## Install
 
