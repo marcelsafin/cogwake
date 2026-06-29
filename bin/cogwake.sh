@@ -1,28 +1,40 @@
 #!/usr/bin/env bash
-# cogwake — keep the Mac awake ONLY while an AI coding agent is actively
-# working (thinking / streaming tokens / running a tool it spawned), then let it
-# sleep normally. Detection = CPU time the agent process tree burns in a short
-# window, so an *idle* agent sitting at a prompt does NOT hold the machine awake.
+# cogwake — keep the Mac awake while an AI coding agent is actively working,
+# INCLUDING with the lid closed on battery (laptop in a bag, tethered to a
+# phone), then let it sleep ~HOLD seconds after the agent goes quiet.
 #
-# Covers CLI agents (Copilot CLI, Claude CLI, Codex, aider, …) and, for free,
-# VS Code's copilot-language-server (matched by the "copilot" pattern) — its CPU
-# only spikes while generating, so normal idle editing won't pin the Mac awake.
+# Why root: closing the lid triggers clamshell sleep, which `caffeinate` cannot
+# stop on battery (`caffeinate -s` only holds on AC). The one switch that holds
+# is `pmset disablesleep`, and that needs root — so cogwake runs as a
+# LaunchDaemon, not a per-user agent.
 #
-# Knobs live in ~/.config/cogwake.env (see cogwake.env.example).
-# Bash 3.2 safe (macOS default). No sudo.
+# The lid-close race: the kernel decides at the instant the lid shuts, reading
+# `disablesleep` *then*. A 5 s poll can't set it fast enough after the fact —
+# the Mac is already asleep. So cogwake PRE-ARMS: while the agent is active it
+# sets disablesleep=1 regardless of lid, so a mid-task lid close is already
+# safe. It drops back to 0 once the agent is quiet for HOLD seconds; with the
+# lid shut that means the Mac sleeps within a few seconds of the agent finishing.
+#
+# Detection = CPU the agent process tree burns in a short window, so an *idle*
+# agent sitting at a prompt does not hold the machine awake. Covers CLI agents
+# (Copilot CLI, Claude, Codex, aider, …) and VS Code's copilot-language-server.
+#
+# Knobs live in /usr/local/etc/cogwake.env (see cogwake.env.example).
+# Bash 3.2 safe (macOS default).
 set -u
-export LC_ALL=C   # awk must parse/print "." decimals (ps TIME, CPU deltas), not locale "," 
+export LC_ALL=C   # awk must parse/print "." decimals (ps TIME, CPU deltas), not locale ","
 
-CFG="${COGWAKE_CFG:-$HOME/.config/cogwake.env}"
+CFG="${COGWAKE_CFG:-/usr/local/etc/cogwake.env}"
 [ -f "$CFG" ] && . "$CFG"
 
 : "${AGENT_RE:=copilot|claude|codex|aider|cursor-agent|ollama|gemini-cli|continue}"
 : "${WINDOW:=2}"        # CPU sampling window, seconds
 : "${BUSY_CPU:=0.30}"   # CPU-seconds the tree must burn in WINDOW to count as "working"
                         # 0.30s / 2s ≈ 15% of one core, averaged over the window
-: "${HOLD:=150}"        # stay awake this long after the last activity, seconds
-: "${POLL:=5}"          # pause between checks while idle, seconds
-LOG="${COGWAKE_LOG:-$HOME/Library/Logs/cogwake.log}"
+: "${HOLD:=30}"         # stay awake this long after the last activity, seconds
+: "${POLL:=5}"          # pause between checks, seconds
+: "${BATT_FLOOR:=15}"   # on battery, release below this % so it never dies in a bag
+LOG="${COGWAKE_LOG:-/var/log/cogwake.log}"
 
 log(){ printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$LOG" 2>/dev/null; }
 
@@ -59,9 +71,32 @@ agent_tree(){
     }' | sort -un | tr '\n' ','
 }
 
+lid_closed(){ ioreg -r -k AppleClamshellState -d 4 2>/dev/null | grep -q '"AppleClamshellState" = Yes'; }
+on_battery(){ pmset -g batt 2>/dev/null | grep -q "Battery Power"; }
+batt_pct(){ pmset -g batt 2>/dev/null | grep -Eo '[0-9]+%' | head -1 | tr -d '%'; }
+
+SLEEP_DISABLED=0   # tracked state, avoids spamming pmset
+set_disablesleep(){ # 0|1
+  [ "$1" = "$SLEEP_DISABLED" ] && return
+  if pmset -a disablesleep "$1" 2>>"$LOG"; then
+    SLEEP_DISABLED=$1
+    [ "$1" = 1 ] && log "AWAKE  disablesleep=1 (lid-close safe)" \
+                 || log "release  disablesleep=0 (sleep allowed)"
+  fi
+}
+
 main(){
-  local CAF="" lastactive=0 pids c0 c1 delta active now
-  log "started (re=$AGENT_RE window=${WINDOW}s busy=${BUSY_CPU}cpu-s hold=${HOLD}s)"
+  if [ "$(id -u)" != 0 ]; then
+    echo "cogwake must run as root (pmset disablesleep needs root)" >&2
+    log "ERROR not root — exiting"
+    exit 1
+  fi
+  # Known baseline at start; resets a stuck flag left by a hard kill + relaunch.
+  pmset -a disablesleep 0 2>/dev/null; SLEEP_DISABLED=0
+  trap 'pmset -a disablesleep 0 2>/dev/null; log "stopped — disablesleep reset to 0"' EXIT INT TERM
+
+  local lastactive=0 pids c0 c1 delta active now within want pct
+  log "started (re=$AGENT_RE window=${WINDOW}s busy=${BUSY_CPU}cpu-s hold=${HOLD}s battfloor=${BATT_FLOOR}%)"
   while :; do
     pids=$(agent_tree); pids=${pids%,}
     if [ -n "$pids" ]; then
@@ -77,19 +112,19 @@ main(){
     now=$(date +%s)
     [ "$active" = 1 ] && lastactive=$now
 
-    if [ -n "$pids" ] && [ $((now - lastactive)) -lt "$HOLD" ]; then
-      if [ -z "$CAF" ] || ! kill -0 "$CAF" 2>/dev/null; then
-        # -w $$ : caffeinate auto-releases if this watchdog ever dies (no stuck assertion).
-        caffeinate -i -w "$$" & CAF=$!
-        log "AWAKE held  (Δcpu=${delta:-0}s, pids=$pids)"
+    within=0
+    if [ -n "$pids" ] && [ $((now - lastactive)) -lt "$HOLD" ]; then within=1; fi
+    want=$within
+
+    # Battery safety: never drain to death while closed in a bag.
+    if [ "$want" = 1 ] && on_battery; then
+      pct=$(batt_pct)
+      if [ -n "$pct" ] && [ "$pct" -le "$BATT_FLOOR" ]; then
+        want=0; log "battery ${pct}% <= ${BATT_FLOOR}% — releasing (sleep allowed)"
       fi
-    else
-      if [ -n "$CAF" ] && kill -0 "$CAF" 2>/dev/null; then
-        kill "$CAF" 2>/dev/null; log "sleep allowed"
-      fi
-      CAF=""
     fi
 
+    set_disablesleep "$want"
     sleep "$POLL"
   done
 }

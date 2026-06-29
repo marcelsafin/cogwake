@@ -58,14 +58,15 @@
   <text class="t" x="700" y="95">burned &gt;</text>
   <text class="t" x="700" y="113">threshold?</text>
 
-  <!-- E caffeinate held (awake) -->
-  <rect class="amber" x="855" y="75" width="170" height="50" rx="6"/>
-  <text class="t" x="940" y="105" fill="#fbbf24">caffeinate -i held</text>
+  <!-- E disablesleep on (awake, lid-safe) -->
+  <rect class="amber" x="850" y="73" width="190" height="54" rx="6"/>
+  <text class="t" x="945" y="96" fill="#fbbf24">disablesleep = 1</text>
+  <text class="t" x="945" y="115" fill="#fbbf24" font-size="13">survives lid close</text>
 
   <!-- F quiet > 150s? -->
   <polygon class="node" points="700,190 765,235 700,280 635,235"/>
   <text class="t" x="700" y="230">quiet &gt;</text>
-  <text class="t" x="700" y="248">150s?</text>
+  <text class="t" x="700" y="248">30s?</text>
 
   <!-- G release / sleep allowed -->
   <rect class="grey" x="835" y="212" width="210" height="46" rx="23"/>
