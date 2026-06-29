@@ -1,0 +1,7 @@
+# local logs / state
+*.log
+*.err
+.DS_Store
+
+# rendered, machine-specific launchd plist (install.sh generates it)
+/io.github.marcelsafin.cogwake.plist
