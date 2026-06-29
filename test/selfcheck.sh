@@ -33,4 +33,10 @@ case "$rc" in 0|1) printf 'ok   on_battery runs (rc=%s)\n' "$rc" ;; *) printf 'F
 pct="$(batt_pct)"
 case "$pct" in ''|*[!0-9]*) printf 'FAIL batt_pct not numeric got=%s\n' "$pct"; fail=1 ;; *) printf 'ok   batt_pct numeric (%s%%)\n' "$pct" ;; esac
 
+# thermal predicate: the safety-critical regex (testable without root)
+is_hot heavy    && printf 'ok   is_hot heavy\n'    || { printf 'FAIL is_hot heavy\n'; fail=1; }
+is_hot serious  && printf 'ok   is_hot serious\n'  || { printf 'FAIL is_hot serious\n'; fail=1; }
+is_hot nominal  && { printf 'FAIL is_hot nominal (should be cool)\n'; fail=1; } || printf 'ok   is_hot nominal=cool\n'
+is_hot ""       && { printf 'FAIL is_hot empty (should be cool)\n'; fail=1; } || printf 'ok   is_hot empty=cool\n'
+
 [ "$fail" = 0 ] && { echo "selfcheck OK"; exit 0; } || { echo "selfcheck FAILED"; exit 1; }

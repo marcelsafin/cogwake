@@ -36,9 +36,13 @@ A LaunchDaemon samples every few seconds:
 
 The kernel checks `disablesleep` at the instant the lid shuts. A 5 second poll cannot set it after the fact. The Mac is already asleep. So cogwake pre-arms: while the agent is active it holds `disablesleep=1` even with the lid open, so closing the lid mid-task keeps the work running and the tether up. Thirty quiet seconds drops the flag.
 
-### Battery floor
+### Battery: runs until it dies
 
-A closed laptop in a bag should never run itself flat. On battery below `BATT_FLOOR` percent (default 15), cogwake releases the flag and lets the Mac sleep.
+By default cogwake keeps working on battery with no charge floor. Set `BATT_FLOOR` to a percent (say 15) if you want it to stop and sleep before the battery runs out. Off by default because the thermal valve guards the real bag risk.
+
+### Thermal valve
+
+A closed laptop in a bag has no airflow, so heat is the danger, not charge. With the lid shut, cogwake samples macOS thermal pressure. At a serious level (`THERM_RE`, default `heavy|trapping|sleeping|serious|critical`) it releases the override and lets the Mac sleep to cool, even mid-task. Your work pauses with the process frozen, not killed, and resumes when you open the lid. Normal load that only warms the Mac (moderate or fair pressure) keeps running.
 
 ## Install
 
@@ -73,7 +77,9 @@ Edit `/usr/local/etc/cogwake.env`:
 | `AGENT_RE` | `copilot\|claude\|codex\|aider\|cursor-agent\|ollama\|gemini-cli\|continue` | command patterns that count as an agent |
 | `BUSY_CPU` | `0.30` | CPU-seconds per window that count as working (≈15% of one core) |
 | `HOLD` | `30` | seconds awake after the last activity |
-| `BATT_FLOOR` | `15` | on battery, release below this charge % |
+| `BATT_FLOOR` | `0` | on battery, release below this % (`0` = run till it dies) |
+| `THERM_GUARD` | `1` | with the lid shut, sleep on serious thermal pressure |
+| `THERM_RE` | `heavy\|trapping\|sleeping\|serious\|critical` | pressure levels that count as too hot |
 | `WINDOW` | `2` | CPU sample window, seconds |
 | `POLL` | `5` | pause between checks, seconds |
 
@@ -93,7 +99,7 @@ bash test/selfcheck.sh   # CPU-time parser, process-tree walk, lid + battery pro
 
 - It reads CPU, not intent. A long remote reasoning step with no local CPU and no token traffic past `HOLD` can still let the Mac sleep. Raise `HOLD` to cover that.
 - `disablesleep=1` keeps the display awake too while an agent runs. macOS has no clamshell-only hold on battery.
-- Closed lid plus full CPU means no airflow. A long job in a sealed bag runs warm. The battery floor guards the charge, not the heat.
+- The thermal valve reads macOS thermal pressure, which needs root (no temp sysctl on Apple Silicon). It samples only while the lid is shut. Check the log for the level your Mac reports and tune `THERM_RE`.
 - The daemon resets `disablesleep` to `0` on exit, and again at its next start, so a crash leaves no stuck always-awake state.
 - VS Code coverage rides on `copilot-language-server`. Add other editor agents to `AGENT_RE` by process name.
 

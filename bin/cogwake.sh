@@ -15,6 +15,11 @@
 # safe. It drops back to 0 once the agent is quiet for HOLD seconds; with the
 # lid shut that means the Mac sleeps within a few seconds of the agent finishing.
 #
+# Thermal valve: a closed laptop in a bag has no airflow. When the lid is shut
+# and macOS reports serious thermal pressure, cogwake releases the override and
+# lets the Mac sleep to cool, even mid-task. Heat is the real bag risk, so this
+# guards the hardware while the battery is left to run all the way down.
+#
 # Detection = CPU the agent process tree burns in a short window, so an *idle*
 # agent sitting at a prompt does not hold the machine awake. Covers CLI agents
 # (Copilot CLI, Claude, Codex, aider, …) and VS Code's copilot-language-server.
@@ -33,7 +38,9 @@ CFG="${COGWAKE_CFG:-/usr/local/etc/cogwake.env}"
                         # 0.30s / 2s ≈ 15% of one core, averaged over the window
 : "${HOLD:=30}"         # stay awake this long after the last activity, seconds
 : "${POLL:=5}"          # pause between checks, seconds
-: "${BATT_FLOOR:=15}"   # on battery, release below this % so it never dies in a bag
+: "${BATT_FLOOR:=0}"    # on battery, release below this % (0 = off, run till it dies)
+: "${THERM_GUARD:=1}"   # 1 = with the lid shut, release when thermal pressure is serious
+: "${THERM_RE:=heavy|trapping|sleeping|serious|critical}"  # pressure levels that mean "too hot"
 LOG="${COGWAKE_LOG:-/var/log/cogwake.log}"
 
 log(){ printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$LOG" 2>/dev/null; }
@@ -75,6 +82,15 @@ lid_closed(){ ioreg -r -k AppleClamshellState -d 4 2>/dev/null | grep -q '"Apple
 on_battery(){ pmset -g batt 2>/dev/null | grep -q "Battery Power"; }
 batt_pct(){ pmset -g batt 2>/dev/null | grep -Eo '[0-9]+%' | head -1 | tr -d '%'; }
 
+# macOS thermal pressure level, lowercased (e.g. "nominal"). Needs root; empty if
+# unreadable. This is the supported signal on Apple Silicon (no temp sysctl/SMC key).
+thermal_level(){
+  powermetrics --samplers thermal -n1 -i200 2>/dev/null \
+    | awk -F': *' 'tolower($0) ~ /pressure level/ { print tolower($2); exit }'
+}
+# Pure predicate (testable without root): is this level "too hot"?
+is_hot(){ [ -n "${1:-}" ] && printf '%s' "$1" | grep -Eqi "$THERM_RE"; }
+
 SLEEP_DISABLED=0   # tracked state, avoids spamming pmset
 set_disablesleep(){ # 0|1
   [ "$1" = "$SLEEP_DISABLED" ] && return
@@ -95,8 +111,8 @@ main(){
   pmset -a disablesleep 0 2>/dev/null; SLEEP_DISABLED=0
   trap 'pmset -a disablesleep 0 2>/dev/null; log "stopped — disablesleep reset to 0"' EXIT INT TERM
 
-  local lastactive=0 pids c0 c1 delta active now within want pct
-  log "started (re=$AGENT_RE window=${WINDOW}s busy=${BUSY_CPU}cpu-s hold=${HOLD}s battfloor=${BATT_FLOOR}%)"
+  local lastactive=0 pids c0 c1 delta active now within want pct lvl
+  log "started (re=$AGENT_RE window=${WINDOW}s busy=${BUSY_CPU}cpu-s hold=${HOLD}s battfloor=${BATT_FLOOR}% therm=${THERM_GUARD})"
   while :; do
     pids=$(agent_tree); pids=${pids%,}
     if [ -n "$pids" ]; then
@@ -116,11 +132,23 @@ main(){
     if [ -n "$pids" ] && [ $((now - lastactive)) -lt "$HOLD" ]; then within=1; fi
     want=$within
 
-    # Battery safety: never drain to death while closed in a bag.
-    if [ "$want" = 1 ] && on_battery; then
+    # Battery floor: off by default (run till it dies). Set BATT_FLOOR>0 to guard charge.
+    if [ "$want" = 1 ] && [ "$BATT_FLOOR" -gt 0 ] && on_battery; then
       pct=$(batt_pct)
       if [ -n "$pct" ] && [ "$pct" -le "$BATT_FLOOR" ]; then
         want=0; log "battery ${pct}% <= ${BATT_FLOOR}% — releasing (sleep allowed)"
+      fi
+    fi
+
+    # Thermal valve: only matters with the lid shut (no airflow). Sample only then.
+    if [ "$want" = 1 ] && [ "$THERM_GUARD" = 1 ] && lid_closed; then
+      lvl=$(thermal_level)
+      if is_hot "$lvl"; then
+        want=0; log "thermal '$lvl' with lid closed — releasing to cool (sleep allowed)"
+      elif [ -n "$lvl" ]; then
+        log "thermal '$lvl' (lid closed, holding)"
+      else
+        log "thermal: unreadable (powermetrics gave nothing) — holding"
       fi
     fi
 
