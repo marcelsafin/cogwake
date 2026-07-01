@@ -42,7 +42,7 @@ By default cogwake keeps working on battery with no charge floor. Set `BATT_FLOO
 
 ### Thermal valve
 
-A closed laptop in a bag has no airflow, so heat is the danger, not charge. With the lid shut, cogwake samples macOS thermal pressure. At a serious level (`THERM_RE`, default `heavy|trapping|sleeping|serious|critical`) it releases the override and lets the Mac sleep to cool, even mid-task. Your work pauses with the process frozen, not killed, and resumes when you open the lid. Normal load that only warms the Mac (moderate or fair pressure) keeps running.
+A closed laptop in a bag has no airflow, so heat threatens the hardware before a drained battery does. With the lid shut, cogwake samples macOS thermal pressure. At a serious level (`THERM_RE`, default `heavy|trapping|sleeping|serious|critical`) it releases the override and lets the Mac sleep to cool, even mid-task. Your work pauses with the process frozen, and resumes when you open the lid. Normal load that only warms the Mac (moderate or fair pressure) keeps running.
 
 ### Footprint
 
@@ -104,7 +104,7 @@ bash test/integration.sh    # state machine: 14 hold/release scenarios via mocke
 
 ## Limits
 
-- It reads CPU, not intent. A long remote reasoning step with no local CPU and no token traffic past `HOLD` can still let the Mac sleep. Raise `HOLD` to cover that.
+- It reads CPU. It cannot see intent, so a long remote reasoning step with no local CPU and no token traffic past `HOLD` can still let the Mac sleep. Raise `HOLD` to cover that.
 - Detection matches the whole command line, so a GUI app or daemon whose path holds an agent word (a browser bundled as `<name>.app`, a desktop chat app) would over-match. `EXCLUDE_RE` drops those by command; add your own if something slips through. Check `agent_tree` against `/var/log/cogwake.log`.
 - `disablesleep=1` keeps the display awake too while an agent runs. macOS has no clamshell-only hold on battery.
 - The thermal valve reads macOS thermal pressure, which needs root (no temp sysctl on Apple Silicon). It samples only while the lid is shut. Check the log for the level your Mac reports and tune `THERM_RE`.
