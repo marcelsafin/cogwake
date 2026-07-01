@@ -46,7 +46,7 @@ A closed laptop in a bag has no airflow, so heat threatens the hardware before a
 
 ### Footprint
 
-cogwake can't go fully idle while the lid is open. To win the lid-close race it has to pre-arm, which means a light pulse must run with the lid open to keep the flag right. That pulse is one `pgrep` plus one `ps` scan, about 0.08 CPU-seconds per cycle, and with the lid open it polls every `LID_OPEN_POLL` seconds (default 15). The heavy part, the `powermetrics` thermal sample, runs only with the lid shut. So at your desk it costs near zero, and it does the real work in the bag.
+cogwake can't go idle while the lid is open. To win the lid-close race it has to pre-arm, which means a light pulse must run with the lid open to keep the flag right. That pulse is one `pgrep` plus one `ps` scan, about 0.08 CPU-seconds per cycle, and with the lid open it polls every `LID_OPEN_POLL` seconds (default 15). The heavy part, the `powermetrics` thermal sample, runs only with the lid shut. So at your desk it costs near zero, and it does the real work in the bag.
 
 ## Install
 
