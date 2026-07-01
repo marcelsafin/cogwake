@@ -14,6 +14,9 @@ PLIST="/Library/LaunchDaemons/$LABEL.plist"
 ERRLOG="/var/log/cogwake.err"
 
 mkdir -p /usr/local/bin /usr/local/etc /Library/LaunchDaemons
+# cogwake.sh sources the config as root, so the config dir must not be writable by
+# non-root (Intel Homebrew leaves /usr/local user-owned; installs can leave etc 0775).
+chown root:wheel /usr/local/etc && chmod 0755 /usr/local/etc
 
 install -m 0755 -o root -g wheel "$REPO/bin/cogwake.sh" "$BIN"
 install -m 0755 -o root -g wheel "$REPO/bin/cogwake" /usr/local/bin/cogwake   # on/off/status CLI

@@ -33,6 +33,11 @@ case "$rc" in 0|1) printf 'ok   on_battery runs (rc=%s)\n' "$rc" ;; *) printf 'F
 pct="$(batt_pct)"
 case "$pct" in ''|*[!0-9]*) printf 'FAIL batt_pct not numeric got=%s\n' "$pct"; fail=1 ;; *) printf 'ok   batt_pct numeric (%s%%)\n' "$pct" ;; esac
 
+# config_safe: refuse to source a config root can't trust (LPE guard)
+tmp_cfg="$(mktemp)"; chmod 0600 "$tmp_cfg"
+config_safe "$tmp_cfg" && { printf 'FAIL config_safe non-root-owned (should reject)\n'; fail=1; } || printf 'ok   config_safe rejects non-root-owned\n'
+rm -f "$tmp_cfg"
+
 # thermal predicate: the safety-critical regex (testable without root)
 is_hot heavy    && printf 'ok   is_hot heavy\n'    || { printf 'FAIL is_hot heavy\n'; fail=1; }
 is_hot serious  && printf 'ok   is_hot serious\n'  || { printf 'FAIL is_hot serious\n'; fail=1; }

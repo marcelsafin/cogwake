@@ -30,7 +30,14 @@ set -u
 export LC_ALL=C   # awk must parse/print "." decimals (ps TIME, CPU deltas), not locale ","
 
 CFG="${COGWAKE_CFG:-/usr/local/etc/cogwake.env}"
-[ -f "$CFG" ] && . "$CFG"
+# Root sources this, so a non-root-writable config would be local root escalation
+# (e.g. /usr/local/etc group-writable, or Intel Homebrew's user-owned /usr/local).
+# Only source it if root owns it and nobody else can write it.
+config_safe(){ [ "$(stat -f '%u' "$1")" = 0 ] && [ -z "$(find "$1" -perm +022)" ]; }
+if [ -f "$CFG" ]; then
+  if config_safe "$CFG"; then . "$CFG"
+  else printf 'cogwake: WARN %s not root-owned or group/world-writable — ignoring (using defaults)\n' "$CFG" >&2; fi
+fi
 
 : "${AGENT_RE:=copilot|claude|codex|aider|cursor-agent|ollama|gemini-cli|continue}"
 # Matching the full command line (pgrep -f) is needed because codex/gemini run as

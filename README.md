@@ -113,6 +113,7 @@ bash test/integration.sh    # state machine: 14 hold/release scenarios via mocke
 - `disablesleep=1` keeps the display awake too while an agent runs. macOS has no clamshell-only hold on battery.
 - The thermal valve reads macOS thermal pressure, which needs root (no temp sysctl on Apple Silicon). It samples only while the lid is shut. Check the log for the level your Mac reports and tune `THERM_RE`.
 - The daemon resets `disablesleep` to `0` on exit, and again at its next start, so a crash leaves no stuck always-awake state.
+- The config is sourced by root, so cogwake refuses to read `cogwake.env` unless root owns it and it is not group/world-writable (otherwise a local user could inject code that runs as root). `install.sh` also locks down `/usr/local/etc`.
 - VS Code coverage rides on `copilot-language-server`. Add other editor agents to `AGENT_RE` by process name.
 
 ## Uninstall
