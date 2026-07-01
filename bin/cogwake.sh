@@ -113,6 +113,8 @@ thermal_level(){
 is_hot(){ [ -n "${1:-}" ] && printf '%s' "$1" | grep -Eqi "$THERM_RE"; }
 
 SLEEP_DISABLED=0   # tracked state, avoids spamming pmset
+# Sticky decision state (persists across loop iterations; decide() updates them).
+LASTACTIVE=0; THERM_HOT=0; LAST_THERM=0; UNREADABLE=0; BATT_LOGGED=0; WANT=0; WITHIN=0
 set_disablesleep(){ # 0|1
   [ "$1" = "$SLEEP_DISABLED" ] && return
   if pmset -a disablesleep "$1" 2>>"$LOG"; then
@@ -120,6 +122,58 @@ set_disablesleep(){ # 0|1
     [ "$1" = 1 ] && log "AWAKE  disablesleep=1 (lid-close safe)" \
                  || log "release  disablesleep=0 (sleep allowed)"
   fi
+}
+
+# The whole hold/release decision for one cycle. Inputs are this cycle's readings;
+# outputs are the globals WANT (1=hold sleep, 0=allow) and WITHIN (agent actively
+# working / in the HOLD tail, used for the poll cadence). Sensor calls (on_battery,
+# batt_pct, thermal_level) are separate functions so tests can mock them and drive
+# this deterministically. Must NOT be called via $(...) — it updates sticky globals.
+decide(){ # has_pids active closed now
+  local has_pids=$1 active=$2 closed=$3 now=$4 pct lvl
+  [ "$active" = 1 ] && LASTACTIVE=$now
+  WITHIN=0
+  if [ "$has_pids" = 1 ] && [ $((now - LASTACTIVE)) -lt "$HOLD" ]; then WITHIN=1; fi
+  WANT=$WITHIN
+
+  # Battery floor: off by default (run till it dies). Set BATT_FLOOR>0 to guard charge.
+  if [ "$WANT" = 1 ] && [ "$BATT_FLOOR" -gt 0 ] && on_battery; then
+    pct=$(batt_pct)
+    if [ -n "$pct" ] && [ "$pct" -le "$BATT_FLOOR" ]; then
+      WANT=0
+      [ "$BATT_LOGGED" = 1 ] || { log "battery ${pct}% <= ${BATT_FLOOR}% — releasing (sleep allowed)"; BATT_LOGGED=1; }
+    else BATT_LOGGED=0; fi
+  else BATT_LOGGED=0; fi
+
+  # Thermal valve: sampled at most every THERM_POLL while the lid is shut, since
+  # powermetrics is the one heavy call. THERM_HOT is sticky between samples, so a
+  # hot reading keeps the Mac releasable until a later sample reads cool — without
+  # it, re-arming every POLL would skip the heat check and could cook in the bag.
+  if [ "$THERM_GUARD" = 1 ] && [ "$closed" = 1 ]; then
+    if [ $((now - LAST_THERM)) -ge "$THERM_POLL" ]; then
+      LAST_THERM=$now
+      lvl=$(thermal_level)
+      if is_hot "$lvl"; then
+        UNREADABLE=0
+        [ "$THERM_HOT" = 1 ] || log "thermal '$lvl' with lid closed — will sleep to cool"
+        THERM_HOT=1
+      elif [ -n "$lvl" ]; then
+        UNREADABLE=0
+        [ "$THERM_HOT" = 0 ] || log "thermal '$lvl' (lid closed, cool again)"
+        THERM_HOT=0
+      else
+        # Can't read pressure. The thermal valve is the only hardware guard while
+        # sealed (BATT_FLOOR off), so fail safe toward cooling after two misses.
+        UNREADABLE=$((UNREADABLE + 1))
+        if [ "$UNREADABLE" -ge 2 ] && [ "$THERM_HOT" = 0 ]; then
+          THERM_HOT=1; log "thermal: unreadable x$UNREADABLE — releasing to be safe (cannot confirm cool)"
+        fi
+      fi
+    fi
+  else
+    THERM_HOT=0; LAST_THERM=0; UNREADABLE=0   # lid open or guard off: clear; resample at once next close
+  fi
+  [ "$THERM_HOT" = 1 ] && WANT=0
 }
 
 main(){
@@ -132,8 +186,7 @@ main(){
   pmset -a disablesleep 0 2>/dev/null; SLEEP_DISABLED=0
   trap 'pmset -a disablesleep 0 2>/dev/null; log "stopped — disablesleep reset to 0"' EXIT INT TERM
 
-  local lastactive=0 pids c0 c1 delta active now within want pct lvl closed
-  local therm_hot=0 last_therm=0 unreadable=0 batt_logged=0
+  local pids c0 c1 delta active now closed haspids
   log "started (re=$AGENT_RE window=${WINDOW}s busy=${BUSY_CPU}cpu-s hold=${HOLD}s battfloor=${BATT_FLOOR}% therm=${THERM_GUARD}/${THERM_POLL}s poll=${POLL}/${LID_OPEN_POLL}s)"
   while :; do
     pids=$(agent_tree); pids=${pids%,}
@@ -148,59 +201,18 @@ main(){
     fi
 
     now=$(date +%s)
-    [ "$active" = 1 ] && lastactive=$now
     closed=0; lid_closed && closed=1
+    haspids=0; [ -n "$pids" ] && haspids=1
 
-    within=0
-    if [ -n "$pids" ] && [ $((now - lastactive)) -lt "$HOLD" ]; then within=1; fi
-    want=$within
+    decide "$haspids" "$active" "$closed" "$now"   # sets WANT + WITHIN (+ sticky state)
+    set_disablesleep "$WANT"
 
-    # Battery floor: off by default (run till it dies). Set BATT_FLOOR>0 to guard charge.
-    if [ "$want" = 1 ] && [ "$BATT_FLOOR" -gt 0 ] && on_battery; then
-      pct=$(batt_pct)
-      if [ -n "$pct" ] && [ "$pct" -le "$BATT_FLOOR" ]; then
-        want=0
-        [ "$batt_logged" = 1 ] || { log "battery ${pct}% <= ${BATT_FLOOR}% — releasing (sleep allowed)"; batt_logged=1; }
-      else batt_logged=0; fi
-    else batt_logged=0; fi
-
-    # Thermal valve: sampled at most every THERM_POLL while the lid is shut, since
-    # powermetrics is the one heavy call. therm_hot is sticky between samples, so a
-    # hot reading keeps the Mac releasable until a later sample reads cool — without
-    # it, re-arming every POLL would skip the heat check and could cook in the bag.
-    if [ "$THERM_GUARD" = 1 ] && [ "$closed" = 1 ]; then
-      if [ $((now - last_therm)) -ge "$THERM_POLL" ]; then
-        last_therm=$now
-        lvl=$(thermal_level)
-        if is_hot "$lvl"; then
-          unreadable=0
-          [ "$therm_hot" = 1 ] || log "thermal '$lvl' with lid closed — will sleep to cool"
-          therm_hot=1
-        elif [ -n "$lvl" ]; then
-          unreadable=0
-          [ "$therm_hot" = 0 ] || log "thermal '$lvl' (lid closed, cool again)"
-          therm_hot=0
-        else
-          # Can't read pressure. The thermal valve is the only hardware guard while
-          # sealed (BATT_FLOOR off), so fail safe toward cooling after two misses.
-          unreadable=$((unreadable + 1))
-          if [ "$unreadable" -ge 2 ] && [ "$therm_hot" = 0 ]; then
-            therm_hot=1; log "thermal: unreadable x$unreadable — releasing to be safe (cannot confirm cool)"
-          fi
-        fi
-      fi
-    else
-      therm_hot=0; last_therm=0; unreadable=0   # lid open or guard off: clear; resample at once next close
-    fi
-    [ "$therm_hot" = 1 ] && want=0
-
-    set_disablesleep "$want"
     # Poll fast while actually holding the Mac awake (an agent is working, so a
     # mid-task lid close is armed) or whenever the lid is shut. Idle with the lid
     # open (e.g. persistent agent servers sitting at a prompt) polls slowly to
     # spare battery. Tradeoff: an idle agent that starts work can take up to
     # LID_OPEN_POLL to arm — fine, since the lid-close case is mid-work.
-    if [ "$closed" = 1 ] || [ "$within" = 1 ]; then sleep "$POLL"; else sleep "$LID_OPEN_POLL"; fi
+    if [ "$closed" = 1 ] || [ "$WITHIN" = 1 ]; then sleep "$POLL"; else sleep "$LID_OPEN_POLL"; fi
   done
 }
 

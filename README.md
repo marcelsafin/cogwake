@@ -96,8 +96,11 @@ cogwake restart
 ## Test
 
 ```bash
-bash test/selfcheck.sh   # CPU-time parser, process-tree walk, lid + battery probes
+bash test/selfcheck.sh      # unit: CPU-time parser, tree walk, lid/battery probes, is_hot, EXCLUDE_RE
+bash test/integration.sh    # state machine: 14 hold/release scenarios via mocked sensors
 ```
+
+`integration.sh` drives `decide()` (the whole hold/release logic) with a controlled clock and mocked battery/thermal/lid sensors, so the battery-floor, thermal valve, sticky-heat, and HOLD-tail behavior are all verified without root or hardware.
 
 ## Limits
 
