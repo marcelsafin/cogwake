@@ -11,9 +11,9 @@
 
 # cogwake
 
-You close the laptop to catch your train. An agent was mid-task. On battery, macOS clamshell-sleep suspends it within a second or two, and the phone tether drops with it. cogwake holds the Mac awake while an agent burns CPU, keeps running when you close the lid, and lets the Mac sleep about 30 seconds after the agent goes quiet.
+You close the laptop to catch your train while an agent is mid-task. On battery, macOS clamshell sleep suspends it within a second or two, and your phone tether drops with it. cogwake holds the Mac awake while the agent burns CPU, through the lid close, and releases about 30 seconds after it goes quiet.
 
-It targets the work, not the app. An agent parked at a prompt uses no CPU, so the Mac sleeps on its normal timer.
+cogwake reads CPU. An agent idling at a prompt burns almost none, so the Mac sleeps on its normal timer; a working agent holds it awake.
 
 ## Why it needs root
 
