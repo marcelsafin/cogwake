@@ -55,22 +55,19 @@ git clone https://github.com/marcelsafin/cogwake.git && cd cogwake
 sudo ./install.sh
 ```
 
-`install.sh` copies the script to `/usr/local/bin`, the config to `/usr/local/etc/cogwake.env`, renders the LaunchDaemon plist into `/Library/LaunchDaemons`, and loads it in the system domain. It starts at boot and respawns if it dies.
+`install.sh` copies the script to `/usr/local/bin`, the config to `/usr/local/etc/cogwake.env`, renders the LaunchDaemon plist into `/Library/LaunchDaemons`, and loads it in the system domain. It starts at boot and respawns if it dies. Nothing to run day to day: it stays passive until an agent burns CPU.
 
-## Verify
+## Control
 
 ```bash
-# loaded?
-sudo launchctl print system/io.github.marcelsafin.cogwake | grep -E 'state|pid'
-
-# what has it done?
-tail -f /var/log/cogwake.log
-
-# is sleep disabled right now?
-pmset -g | grep SleepDisabled
+cogwake status     # ON/OFF, whether sleep is blocked right now, recent log
+cogwake off        # stop guarding; Mac sleeps normally (persists across reboot)
+cogwake on         # resume
+cogwake restart    # reload after editing the config
+cogwake log        # follow the activity log
 ```
 
-While an agent works you see `SleepDisabled 1`. Stop the agent, wait past the hold, and it reads `0` again.
+`status` and `log` need no root; `on`, `off`, and `restart` prompt for it. While an agent works, `status` shows `sleep: BLOCKED`; idle, it shows `allowed`.
 
 ## Configure
 
@@ -93,7 +90,7 @@ Edit `/usr/local/etc/cogwake.env`:
 Reload after an edit:
 
 ```bash
-sudo launchctl kickstart -k system/io.github.marcelsafin.cogwake
+cogwake restart
 ```
 
 ## Test

@@ -16,6 +16,7 @@ ERRLOG="/var/log/cogwake.err"
 mkdir -p /usr/local/bin /usr/local/etc /Library/LaunchDaemons
 
 install -m 0755 -o root -g wheel "$REPO/bin/cogwake.sh" "$BIN"
+install -m 0755 -o root -g wheel "$REPO/bin/cogwake" /usr/local/bin/cogwake   # on/off/status CLI
 [ -f "$CFG" ] || install -m 0644 -o root -g wheel "$REPO/cogwake.env.example" "$CFG"
 
 sed -e "s|__LABEL__|$LABEL|g" \
@@ -46,3 +47,4 @@ echo "installed: $LABEL (root LaunchDaemon)"
 launchctl print "system/$LABEL" 2>/dev/null | grep -E 'state =|pid =' || true
 echo "config: $CFG"
 echo "log:    /var/log/cogwake.log"
+echo "control: cogwake {on|off|status|restart|log}"

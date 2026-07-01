@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# cogwake control CLI — on/off/status/restart/log for the watchdog daemon.
+# on/off/restart need root (system LaunchDaemon); status/log do not.
+set -eu
+
+LABEL="io.github.marcelsafin.cogwake"
+PLIST="/Library/LaunchDaemons/$LABEL.plist"
+LOG="/var/log/cogwake.log"
+
+need_root(){ [ "$(id -u)" = 0 ] || exec sudo bash "$0" "$@"; }
+
+case "${1:-status}" in
+  on|start)
+    need_root "$@"
+    launchctl enable "system/$LABEL" 2>/dev/null || true
+    # bootstrap, or if it's already/again loaded, restart in place
+    launchctl bootstrap system "$PLIST" 2>/dev/null || launchctl kickstart -k "system/$LABEL"
+    echo "cogwake ON — guards sleep while an agent works"
+    ;;
+  off|stop)
+    need_root "$@"
+    launchctl bootout "system/$LABEL" 2>/dev/null || true
+    launchctl disable "system/$LABEL" 2>/dev/null || true   # stays off across reboot until `cogwake on`
+    pmset -a disablesleep 0 2>/dev/null || true             # release any hold now
+    echo "cogwake OFF — Mac sleeps on its normal timer (persists across reboot)"
+    ;;
+  restart|reload)
+    need_root "$@"
+    launchctl kickstart -k "system/$LABEL" && echo "cogwake restarted (config reloaded)"
+    ;;
+  status)
+    if pgrep -f 'cogwake\.sh' >/dev/null 2>&1; then echo "cogwake: ON (daemon running)"
+    else echo "cogwake: OFF (daemon not running)"; fi
+    pmset -g 2>/dev/null | awk '/SleepDisabled/{print "sleep: " ($2==1 ? "BLOCKED (agent active)" : "allowed")}'
+    [ -f "$LOG" ] && { echo "recent:"; tail -n 3 "$LOG"; }
+    ;;
+  log)
+    exec tail -f "$LOG"
+    ;;
+  *)
+    echo "usage: cogwake {on|off|status|restart|log}" >&2
+    exit 1
+    ;;
+esac
