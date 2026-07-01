@@ -3,6 +3,10 @@
 </p>
 
 <p align="center">
+  <img src="assets/demo.gif" alt="cogwake demo: an agent works, cogwake blocks sleep, the lid closes and work keeps running, the agent finishes, cogwake lets the Mac sleep" width="94%">
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/macOS-LaunchDaemon-0d1117" alt="macOS LaunchDaemon">
   <img src="https://img.shields.io/badge/bash-3.2%2B-4EAA25" alt="bash 3.2+">
   <img src="https://img.shields.io/badge/sudo-required-f59e0b" alt="sudo required">
