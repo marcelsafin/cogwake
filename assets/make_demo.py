@@ -69,7 +69,7 @@ def prompt_line(typed=""):
 def type_cmd(cmd):
     for i in range(len(cmd) + 1):
         line = prompt_line(cmd[:i])
-        add(screen + [line], hold=40, cursor=(len(screen), len("~/train ▸ ") + i))
+        add(screen + [line], hold=4, cursor=(len(screen), len("~/train ▸ ") + i))
     screen.append(prompt_line(cmd))
 
 def out(segs, hold=1):
@@ -78,7 +78,7 @@ def out(segs, hold=1):
 
 def pause(ms):
     if frames:
-        durs[-1] += ms
+        durs[-1] += ms / 10  # durs are centiseconds; convert ms
 
 # --- scene 1: launch an agent
 add(screen, hold=60)
