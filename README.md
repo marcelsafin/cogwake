@@ -46,7 +46,7 @@ By default cogwake keeps working on battery with no charge floor. Set `BATT_FLOO
 
 ### Thermal valve
 
-A closed laptop in a bag has no airflow, so heat threatens the hardware before a drained battery does. With the lid shut, cogwake samples macOS thermal pressure. At a serious level (`THERM_RE`, default `heavy|trapping|sleeping|serious|critical`) it releases the override and lets the Mac sleep to cool, even mid-task. Your work pauses with the process frozen, and resumes when you open the lid. Normal load that only warms the Mac (moderate or fair pressure) keeps running.
+A closed laptop in a bag has no airflow, so heat threatens the hardware before a drained battery does. With the lid shut, cogwake samples macOS thermal pressure. As soon as pressure rises above nominal (`THERM_RE`, default `moderate|fair|heavy|trapping|sleeping|serious|critical`) it releases the override and lets the Mac sleep to cool, even mid-task. Your work pauses with the process frozen, and resumes when you open the lid. The default is deliberately conservative: sealed in a bag, waiting for "heavy" pressure means the chassis is already hot — narrow the regex if you accept more heat for fewer pauses.
 
 ### Footprint
 
@@ -86,7 +86,7 @@ Edit `/usr/local/etc/cogwake.env`:
 | `THERM_POLL` | `30` | seconds between thermal samples (the one costly call) |
 | `BATT_FLOOR` | `0` | on battery, release below this % (`0` = run till it dies) |
 | `THERM_GUARD` | `1` | with the lid shut, sleep on serious thermal pressure |
-| `THERM_RE` | `heavy\|trapping\|sleeping\|serious\|critical` | pressure levels that count as too hot |
+| `THERM_RE` | `moderate\|fair\|heavy\|trapping\|sleeping\|serious\|critical` | pressure levels that count as too hot |
 | `WINDOW` | `2` | CPU sample window, seconds |
 | `POLL` | `5` | pause between checks while the lid is shut |
 | `LID_OPEN_POLL` | `15` | pause between checks while the lid is open (lighter) |

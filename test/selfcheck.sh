@@ -40,6 +40,7 @@ rm -f "$tmp_cfg"
 
 # thermal predicate: the safety-critical regex (testable without root)
 is_hot heavy    && printf 'ok   is_hot heavy\n'    || { printf 'FAIL is_hot heavy\n'; fail=1; }
+is_hot moderate && printf 'ok   is_hot moderate\n' || { printf 'FAIL is_hot moderate\n'; fail=1; }
 is_hot serious  && printf 'ok   is_hot serious\n'  || { printf 'FAIL is_hot serious\n'; fail=1; }
 is_hot nominal  && { printf 'FAIL is_hot nominal (should be cool)\n'; fail=1; } || printf 'ok   is_hot nominal=cool\n'
 is_hot ""       && { printf 'FAIL is_hot empty (should be cool)\n'; fail=1; } || printf 'ok   is_hot empty=cool\n'

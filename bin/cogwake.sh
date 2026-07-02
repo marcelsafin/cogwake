@@ -58,7 +58,7 @@ fi
                          # pre-arms, and the heavy thermal sampler never runs then)
 : "${BATT_FLOOR:=0}"    # on battery, release below this % (0 = off, run till it dies)
 : "${THERM_GUARD:=1}"   # 1 = with the lid shut, release when thermal pressure is serious
-: "${THERM_RE:=heavy|trapping|sleeping|serious|critical}"  # pressure levels that mean "too hot"
+: "${THERM_RE:=moderate|fair|heavy|trapping|sleeping|serious|critical}"  # pressure levels that mean "too hot"
 : "${THERM_POLL:=30}"   # seconds between thermal samples (powermetrics is the only real
                         # cost; sampling it every 30s instead of every POLL saves battery)
 LOG="${COGWAKE_LOG:-/var/log/cogwake.log}"
